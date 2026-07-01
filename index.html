@@ -137,12 +137,12 @@
   #ticketPrintArea{display:none;}
 
   @media print{
-    @page{ size:80mm auto; margin:0; }
-    html, body{width:80mm;margin:0;padding:0;}
-    body *{visibility:hidden;}
-    #ticketPrintArea, #ticketPrintArea *{visibility:visible;}
-    #ticketPrintArea{
-      display:block;position:fixed;top:0;right:0;width:100%;
+    @page{ size:80mm 150mm; margin:0; }
+    html, body{width:80mm;margin:0 auto;padding:0;}
+    body.printing-ticket > .app{display:none !important;}
+    body.printing-ticket .modal-bg{display:none !important;}
+    body.printing-ticket #ticketPrintArea{
+      display:block;position:static;width:100%;
     }
     .ticket{
       width:72mm;margin:0 auto;padding:3mm 3mm;font-family:"Tahoma",sans-serif;
@@ -160,11 +160,10 @@
 
   #statsPrintArea{display:none;}
   @media print{
-    @page{ size:80mm auto; margin:0; }
-    body.printing-stats #statsPrintArea{display:block;visibility:visible;position:fixed;top:0;right:0;width:100%;}
-    body.printing-stats #statsPrintArea *{visibility:visible;}
-    body.printing-stats #ticketPrintArea{display:none !important;}
-    body.printing-stats > .app{display:none;}
+    @page{ size:80mm 220mm; margin:0; }
+    body.printing-stats #statsPrintArea{display:block;position:static;width:100%;}
+    body.printing-stats > .app{display:none !important;}
+    body.printing-stats .modal-bg{display:none !important;}
   }
   #statsPrintArea .rep{width:74mm;margin:0 auto;padding:3mm 3mm;font-family:Tahoma,sans-serif;color:#000;text-align:center;}
   #statsPrintArea .rep h2{font-size:14px;margin:0 0 2mm;}
@@ -589,6 +588,7 @@
     document.getElementById("tk-number").textContent = dept.prefix + "-" + String(number).padStart(3,"0");
     document.getElementById("tk-meta").textContent = (opts.dateStr || formatDateArabic(todayKey())) + "   |   " + (opts.timeStr || "");
     document.body.classList.remove("printing-stats");
+    document.body.classList.add("printing-ticket");
     setTimeout(()=>window.print(), 60);
     showToast((opts.reprint ? "إعادة طباعة الرقم " : "تم إصدار الرقم ")+dept.prefix+"-"+String(number).padStart(3,"0"));
   }
@@ -777,6 +777,7 @@
 
   window.addEventListener("afterprint", ()=>{
     document.body.classList.remove("printing-stats");
+    document.body.classList.remove("printing-ticket");
   });
 
   // ---------- Init ----------
