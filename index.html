@@ -275,6 +275,7 @@
         <button class="btn secondary" id="savePaperWidthBtn">حفظ القياس</button>
       </div>
       <div class="hint">اختر المقاس المطابق لرول الطابعة الموجودة لديك في الاستعلامات.</div>
+      <div class="hint">مواصفات رول الورق الحراري الموصى به لمقاس 80 ملم: العرض 80 ملم، القطر الكلي للرول عادة بين 70 و80 ملم، وقطر القلب الداخلي (الفتحة) 12 أو 13 ملم. هذه المواصفات خاصة بشراء الورق فقط ولا تحتاج ضبطاً إضافياً في النظام.</div>
     </div>
 
     <div class="card">
@@ -690,14 +691,18 @@
     ensureTodayRolled();
     document.getElementById("statsDateLabel").textContent = formatDateArabic(state.currentDate);
     const table = document.getElementById("statsTable");
-    let rows = "<tr><th>القسم</th><th>عدد الأرقام الصادرة</th></tr>";
+    let rows = "<tr><th>القسم</th><th>عدد الأرقام الصادرة</th><th>إجراء</th></tr>";
     let total = 0;
     state.departments.forEach(dept=>{
       const c = state.counts[dept.id] || 0;
       total += c;
-      rows += `<tr><td>${escapeHtml(dept.name)}</td><td>${c}</td></tr>`;
+      rows += `<tr>
+        <td>${escapeHtml(dept.name)}</td>
+        <td>${c}</td>
+        <td><button class="btn danger reset-dept-btn" data-id="${escapeHtml(dept.id)}" style="padding:5px 10px;font-size:12.5px;">تصفير</button></td>
+      </tr>`;
     });
-    rows += `<tr><td>الإجمالي</td><td>${total}</td></tr>`;
+    rows += `<tr><td>الإجمالي</td><td>${total}</td><td></td></tr>`;
     table.innerHTML = rows;
 
     const histTable = document.getElementById("historyTable");
@@ -705,15 +710,61 @@
     if(!days.length){
       histTable.innerHTML = '<tr><td style="color:var(--muted);">لا يوجد سجل سابق بعد</td></tr>';
     }else{
-      let hrows = "<tr><th>التاريخ</th><th>الإجمالي</th></tr>";
+      let hrows = "<tr><th>التاريخ</th><th>الإجمالي</th><th>إجراءات</th></tr>";
       days.forEach(day=>{
         const counts = state.history[day];
         const t = Object.values(counts).reduce((a,b)=>a+b,0);
-        hrows += `<tr><td>${formatDateArabic(day)}</td><td>${t}</td></tr>`;
+        hrows += `<tr>
+          <td>${formatDateArabic(day)}</td>
+          <td>${t}</td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn secondary history-pdf-btn" data-day="${day}" style="padding:5px 10px;font-size:12.5px;">⬇ PDF</button>
+              <button class="btn danger history-del-btn" data-day="${day}" style="padding:5px 10px;font-size:12.5px;">حذف</button>
+            </div>
+          </td>
+        </tr>`;
       });
       histTable.innerHTML = hrows;
     }
   }
+
+  // Reset a single department's counter for today (delegated click on statsTable)
+  document.getElementById("statsTable").addEventListener("click", (e)=>{
+    const btn = e.target.closest(".reset-dept-btn");
+    if(!btn) return;
+    const deptId = btn.dataset.id;
+    const dept = state.departments.find(d=>d.id===deptId);
+    if(!dept) return;
+    if(confirm(`سيتم تصفير عداد قسم "${dept.name}" لليوم الحالي فقط. هل تريد المتابعة؟`)){
+      state.counts[deptId] = 0;
+      delete state.lastIssued[deptId];
+      saveState();
+      renderDeptGrid();
+      renderStats();
+      showToast(`تم تصفير عداد قسم ${dept.name}`);
+    }
+  });
+
+  // History table actions: download PDF (print dialog) / delete a day (delegated click)
+  document.getElementById("historyTable").addEventListener("click", (e)=>{
+    const pdfBtn = e.target.closest(".history-pdf-btn");
+    if(pdfBtn){
+      downloadHistoryPdf(pdfBtn.dataset.day);
+      return;
+    }
+    const delBtn = e.target.closest(".history-del-btn");
+    if(delBtn){
+      const day = delBtn.dataset.day;
+      if(confirm(`سيتم حذف سجل يوم ${formatDateArabic(day)} نهائياً من السجل. هل تريد المتابعة؟`)){
+        delete state.history[day];
+        saveState();
+        renderStats();
+        showToast("تم حذف سجل اليوم المحدد");
+      }
+      return;
+    }
+  });
 
   document.getElementById("resetTodayBtn").addEventListener("click", ()=>{
     if(confirm("سيتم تصفير عدادات اليوم الحالي بشكل نهائي. هل تريد المتابعة؟")){
@@ -726,22 +777,32 @@
     }
   });
 
-  function buildStatsReportHtml(){
+  function buildStatsReportHtml(dateKey, counts){
     document.getElementById("rep-hospital").textContent = state.hospitalName;
-    document.getElementById("rep-date").textContent = "تقرير يوم " + formatDateArabic(state.currentDate);
+    document.getElementById("rep-date").textContent = "تقرير يوم " + formatDateArabic(dateKey);
     let total = 0;
     let rows = "<tr><th>القسم</th><th>العدد</th></tr>";
+    // Show current departments; fall back to a generic label for departments
+    // that existed on that day but were later deleted from the system.
+    const knownIds = new Set();
     state.departments.forEach(dept=>{
-      const c = state.counts[dept.id] || 0;
+      const c = counts[dept.id] || 0;
+      knownIds.add(dept.id);
       total += c;
       rows += `<tr><td>${escapeHtml(dept.name)}</td><td>${c}</td></tr>`;
+    });
+    Object.keys(counts).forEach(deptId=>{
+      if(knownIds.has(deptId)) return;
+      const c = counts[deptId] || 0;
+      total += c;
+      rows += `<tr><td>${escapeHtml(deptId)} (قسم محذوف)</td><td>${c}</td></tr>`;
     });
     rows += `<tr class="total"><td>الإجمالي</td><td>${total}</td></tr>`;
     document.getElementById("rep-table").innerHTML = rows;
   }
 
   function printStatsReport(){
-    buildStatsReportHtml();
+    buildStatsReportHtml(state.currentDate, state.counts);
     document.body.classList.add("printing-stats");
     setTimeout(()=>{
       window.print();
@@ -749,6 +810,22 @@
     }, 60);
   }
   document.getElementById("printStatsBtn").addEventListener("click", printStatsReport);
+
+  // Download (via print dialog -> "Save as PDF") the report for a past day in history
+  function downloadHistoryPdf(day){
+    const counts = state.history[day];
+    if(!counts){
+      showToast("لا يوجد سجل لهذا اليوم");
+      return;
+    }
+    buildStatsReportHtml(day, counts);
+    document.body.classList.add("printing-stats");
+    setTimeout(()=>{
+      window.print();
+      setTimeout(()=>document.body.classList.remove("printing-stats"), 300);
+    }, 60);
+    showToast("اختر \"حفظ كـ PDF\" من نافذة الطباعة لتنزيل التقرير");
+  }
 
   // ---------- Auto stats trigger ----------
   function checkAutoStats(now){
