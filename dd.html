@@ -13,7 +13,7 @@
     display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;
     text-align:center;
   }
-  header{position:fixed;top:0;right:0;left:0;padding:18px 20px;text-align:center;}
+  header{position:fixed;top:0;right:0;left:0;padding:18px 20px;text-align:center;z-index:1;}
   header h1{margin:0;font-size:clamp(18px,3vw,32px);}
   header .sub{font-size:clamp(11px,1.4vw,16px);opacity:.8;margin-top:4px;}
   #syncStatus{font-size:clamp(10px,1.2vw,13px);margin-top:4px;opacity:.85;}
@@ -36,9 +36,15 @@
     font-family:inherit;font-size:20px;padding:14px 18px;border-radius:12px;border:none;margin-top:14px;width:100%;
   }
   .deptPicker button{background:var(--amber);color:#2a1c00;font-weight:800;cursor:pointer;}
+
+  #soundToggle{
+    position:fixed;top:14px;left:14px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);
+    color:#fff;border-radius:10px;padding:8px 14px;font-size:clamp(11px,1.3vw,14px);cursor:pointer;z-index:20;
+  }
 </style>
 </head>
 <body>
+<button id="soundToggle">🔇 تفعيل التنبيه الصوتي</button>
 <header>
   <h1 id="hospitalName">مستشفى الدورة الأهلي</h1>
   <div class="sub">شاشة القسم</div>
@@ -79,6 +85,59 @@
   let nowServing = {};
   let lastShownNumber = null;
   let selectedDeptId = localStorage.getItem(DEVICE_KEY) || null;
+  let soundEnabled = false;
+  let audioCtx = null;
+  let firstRender = true;
+
+  function ensureAudioContext(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if(audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+
+  document.getElementById("soundToggle").addEventListener("click", ()=>{
+    soundEnabled = !soundEnabled;
+    document.getElementById("soundToggle").textContent = soundEnabled ? "🔊 التنبيه الصوتي مفعّل" : "🔇 تفعيل التنبيه الصوتي";
+    if(soundEnabled) ensureAudioContext();
+  });
+
+  function playAlertBeep(){
+    try{
+      const ctx = ensureAudioContext();
+      const now = ctx.currentTime;
+      // Classic bank/counter "ding-dong" chime: two descending bell-like notes
+      const notes = [ {freq:659.25, start:0}, {freq:523.25, start:0.38} ]; // E5 -> C5
+      notes.forEach(n=>{
+        const fundamental = ctx.createOscillator();
+        const harmonic = ctx.createOscillator();
+        const fundGain = ctx.createGain();
+        const harmGain = ctx.createGain();
+
+        fundamental.type = "sine";
+        harmonic.type = "sine";
+        fundamental.frequency.setValueAtTime(n.freq, now + n.start);
+        harmonic.frequency.setValueAtTime(n.freq * 2, now + n.start);
+
+        fundGain.gain.setValueAtTime(0.0001, now + n.start);
+        fundGain.gain.exponentialRampToValueAtTime(0.6, now + n.start + 0.015);
+        fundGain.gain.exponentialRampToValueAtTime(0.0001, now + n.start + 0.85);
+
+        harmGain.gain.setValueAtTime(0.0001, now + n.start);
+        harmGain.gain.exponentialRampToValueAtTime(0.18, now + n.start + 0.015);
+        harmGain.gain.exponentialRampToValueAtTime(0.0001, now + n.start + 0.6);
+
+        fundamental.connect(fundGain).connect(ctx.destination);
+        harmonic.connect(harmGain).connect(ctx.destination);
+
+        fundamental.start(now + n.start);
+        fundamental.stop(now + n.start + 0.9);
+        harmonic.start(now + n.start);
+        harmonic.stop(now + n.start + 0.65);
+      });
+    }catch(e){ console.error(e); }
+  }
 
   const urlParams = new URLSearchParams(window.location.search);
   const urlDept = urlParams.get("dept");
@@ -117,13 +176,16 @@
     const serving = nowServing[dept.id] || 0;
     const text = serving>0 ? (dept.prefix+"-"+String(serving).padStart(3,"0")) : "—";
     const numEl = document.getElementById("servingNumber");
-    if(lastShownNumber !== null && text !== numEl.textContent){
+    const changed = lastShownNumber !== null && serving !== lastShownNumber;
+    if(changed){
       numEl.classList.remove("pulse");
       void numEl.offsetWidth;
       numEl.classList.add("pulse");
+      if(!firstRender && soundEnabled) playAlertBeep();
     }
     numEl.textContent = text;
     lastShownNumber = serving;
+    firstRender = false;
   }
 
   stateDocRef.onSnapshot((snap)=>{
