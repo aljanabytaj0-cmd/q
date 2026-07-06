@@ -7,8 +7,11 @@
 <style>
   :root{ --teal-deep:#16224f; --teal:#2f4fa3; --sand:#f3f5fb; --ink:#1c2333; --muted:#6b7480; --amber:#d8384a; --line:#e2e6f0; }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;height:100%;}
-  body{font-family:"Tahoma","Segoe UI",Arial,sans-serif;background:var(--sand);color:var(--ink);min-height:100vh;}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;}
+  body{
+    font-family:"Tahoma","Segoe UI",Arial,sans-serif;background:var(--sand);color:var(--ink);
+    height:100vh;display:flex;flex-direction:column;
+  }
 
   header{
     background:linear-gradient(100deg, #0d1733, var(--teal-deep) 55%, var(--teal));
@@ -20,27 +23,73 @@
   #syncStatus{font-size:clamp(11px,1.1vw,14px);}
   #clock{font-size:clamp(16px,1.8vw,26px);font-weight:800;text-align:center;}
   #dateLine{font-size:clamp(11px,1.1vw,14px);text-align:center;opacity:.85;}
-  #soundToggle{
+  #soundToggle, #settingsToggle{
     background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;
     border-radius:10px;padding:10px 16px;font-size:14px;cursor:pointer;
   }
 
+  .content-split{flex:1;display:flex;flex-direction:row;overflow:hidden;min-height:0;}
+  .queue-pane{flex:1 1 58%;overflow-y:auto;min-width:0;}
+  .video-pane{
+    flex:1 1 42%;background:#000;position:relative;display:flex;align-items:center;justify-content:center;
+    border-right:3px solid var(--teal-deep);min-width:0;
+  }
+  .video-pane iframe, .video-pane video{width:100%;height:100%;border:0;display:block;}
+  .video-placeholder{color:#aab3c5;text-align:center;font-size:clamp(14px,1.6vw,20px);padding:20px;line-height:1.8;}
+
   .grid{
-    display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;
-    padding:26px;
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;
+    padding:22px;
   }
   .cell{
-    background:#fff;border-radius:18px;padding:26px 16px 22px;text-align:center;
+    background:#fff;border-radius:18px;padding:22px 14px 18px;text-align:center;
     border:2px solid var(--line);border-top:5px solid var(--teal);
     box-shadow:0 4px 16px rgba(22,34,79,0.08);
     transition:border-color .3s ease, transform .3s ease, box-shadow .3s ease;
   }
   .cell.flash{ border-color:var(--amber); border-top-color:var(--amber); transform:scale(1.03); box-shadow:0 8px 24px rgba(216,56,74,0.25); }
-  .cell .dname{font-size:clamp(18px,1.8vw,26px);font-weight:800;color:var(--teal-deep);margin-bottom:8px;}
-  .cell .num{font-size:clamp(46px,6vw,90px);font-weight:900;color:var(--ink);line-height:1;}
-  .cell .num.empty{color:var(--muted);font-size:clamp(28px,3vw,42px);}
+  .cell .dname{font-size:clamp(16px,1.6vw,22px);font-weight:800;color:var(--teal-deep);margin-bottom:6px;}
+  .cell .num{font-size:clamp(38px,5vw,66px);font-weight:900;color:var(--ink);line-height:1;}
+  .cell .num.empty{color:var(--muted);font-size:clamp(24px,2.6vw,34px);}
 
   .empty-note{padding:60px;text-align:center;color:var(--muted);font-size:16px;}
+
+  .modal-bg{
+    display:none;position:fixed;inset:0;background:rgba(10,15,35,0.65);
+    align-items:center;justify-content:center;z-index:999;padding:16px;
+  }
+  .modal-bg.show{display:flex;}
+  .modal{background:#fff;border-radius:16px;padding:22px;max-width:520px;width:100%;color:var(--ink);}
+  .modal h3{margin:0 0 6px;color:var(--teal-deep);}
+  .modal .hint{font-size:12.5px;color:var(--muted);margin-bottom:10px;}
+  .modal textarea{
+    width:100%;min-height:180px;font-family:inherit;font-size:14px;padding:10px;border-radius:10px;
+    border:1px solid var(--line);resize:vertical;direction:ltr;text-align:left;
+  }
+  #videoLinksList{max-height:280px;overflow-y:auto;margin-bottom:10px;}
+  .video-link-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+  .video-link-row .row-num{
+    flex-shrink:0;width:26px;height:26px;border-radius:50%;background:var(--teal);color:#fff;
+    font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;
+  }
+  .video-link-row input{
+    flex:1;min-width:0;font-family:inherit;font-size:13.5px;padding:9px 10px;border-radius:8px;
+    border:1px solid var(--line);direction:ltr;text-align:left;
+  }
+  .video-link-row .row-remove{
+    flex-shrink:0;background:#fdecee;color:var(--amber);border:1px solid var(--amber);
+    border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;font-weight:700;
+  }
+  .btn-add-video{
+    width:100%;background:#eef1fb;color:var(--teal);border:1.5px dashed var(--teal);border-radius:10px;
+    padding:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:6px;
+  }
+  .modal .modal-actions{display:flex;gap:10px;margin-top:14px;}
+  .modal button{
+    font-family:inherit;font-size:14px;padding:10px 18px;border-radius:10px;border:none;cursor:pointer;font-weight:700;
+  }
+  .modal .btn-save{background:var(--teal);color:#fff;}
+  .modal .btn-cancel{background:#eef0f6;color:var(--ink);}
 </style>
 </head>
 <body>
@@ -58,10 +107,31 @@
     <div id="dateLine">--/--/----</div>
   </div>
   <button id="soundToggle">🔇 تفعيل التنبيه الصوتي</button>
+  <button id="settingsToggle">⚙ الإعدادات</button>
 </header>
 
-<div class="grid" id="grid"></div>
-<div class="empty-note" id="emptyNote" style="display:none;">لا توجد أقسام مضافة بعد</div>
+<div class="content-split">
+  <div class="queue-pane">
+    <div class="grid" id="grid"></div>
+    <div class="empty-note" id="emptyNote" style="display:none;">لا توجد أقسام مضافة بعد</div>
+  </div>
+  <div class="video-pane" id="videoPane">
+    <div class="video-placeholder">⏳ جاري تحميل الفيديوهات...</div>
+  </div>
+</div>
+
+<div class="modal-bg" id="settingsModal">
+  <div class="modal">
+    <h3>إعدادات فيديوهات الشاشة</h3>
+    <div class="hint">أضف رابط فيديو واحد بكل خانة (يدعم روابط يوتيوب أو روابط فيديو مباشرة mp4). تُعرض الفيديوهات بنفس الترتيب وتتكرر تلقائياً بدون توقف.</div>
+    <div id="videoLinksList"></div>
+    <button class="btn-add-video" id="addVideoLinkBtn" type="button">+ إضافة فيديو جديد</button>
+    <div class="modal-actions">
+      <button class="btn-save" id="saveVideoLinksBtn">حفظ الكل</button>
+      <button class="btn-cancel" id="cancelVideoLinksBtn">إلغاء</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
@@ -79,6 +149,8 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
   const stateDocRef = db.collection("hospitalQueue").doc("state");
+  const settingsDocRef = db.collection("hospitalQueue").doc("mainScreenSettings");
+  const SETTINGS_PASSWORD = "HSO2000";
 
   let soundEnabled = false;
   let previousServing = {};
@@ -157,6 +229,154 @@
     if(!soundEnabled) return;
     playAlertBeep();
   }
+
+  // ---------- Video playlist (queue-room screen) ----------
+  let videoLinks = [];
+  let currentVideoIndex = 0;
+  let ytPlayer = null;
+  let youtubeApiReady = false;
+  let youtubeApiLoading = false;
+  let lastVideoLinksKey = null;
+
+  function isYouTubeUrl(url){
+    return /(?:youtube\.com|youtu\.be)/i.test(url);
+  }
+  function extractYouTubeId(url){
+    try{
+      const u = new URL(url);
+      if(u.hostname.includes("youtu.be")) return u.pathname.slice(1);
+      if(u.searchParams.get("v")) return u.searchParams.get("v");
+      const parts = u.pathname.split("/").filter(Boolean);
+      const embedIdx = parts.indexOf("embed");
+      if(embedIdx>=0 && parts[embedIdx+1]) return parts[embedIdx+1];
+    }catch(e){}
+    return null;
+  }
+  function loadYouTubeApiIfNeeded(callback){
+    if(youtubeApiReady){ callback(); return; }
+    if(youtubeApiLoading){
+      const check = setInterval(()=>{ if(youtubeApiReady){ clearInterval(check); callback(); } }, 200);
+      return;
+    }
+    youtubeApiLoading = true;
+    window.onYouTubeIframeAPIReady = function(){
+      youtubeApiReady = true;
+      callback();
+    };
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+  }
+  function advanceVideo(){
+    if(!videoLinks.length) return;
+    currentVideoIndex = (currentVideoIndex + 1) % videoLinks.length;
+    playCurrentVideo();
+  }
+  function playCurrentVideo(){
+    const pane = document.getElementById("videoPane");
+    if(!videoLinks.length){
+      pane.innerHTML = '<div class="video-placeholder">لا توجد فيديوهات مضافة بعد<br>أضفها من زر ⚙ الإعدادات</div>';
+      return;
+    }
+    if(currentVideoIndex >= videoLinks.length) currentVideoIndex = 0;
+    const url = videoLinks[currentVideoIndex];
+
+    if(isYouTubeUrl(url)){
+      const videoId = extractYouTubeId(url);
+      if(!videoId){ advanceVideo(); return; }
+      pane.innerHTML = '<div id="ytPlayerContainer" style="width:100%;height:100%;"></div>';
+      loadYouTubeApiIfNeeded(()=>{
+        if(ytPlayer){ try{ ytPlayer.destroy(); }catch(e){} ytPlayer = null; }
+        ytPlayer = new YT.Player("ytPlayerContainer", {
+          width: "100%", height: "100%", videoId: videoId,
+          playerVars:{ autoplay:1, mute:1, controls:0, rel:0, playsinline:1, modestbranding:1 },
+          events:{
+            onStateChange:(e)=>{ if(e.data === YT.PlayerState.ENDED) advanceVideo(); },
+            onError:()=>{ advanceVideo(); }
+          }
+        });
+      });
+    }else{
+      pane.innerHTML = '<video id="directVideo" autoplay muted playsinline></video>';
+      const vid = document.getElementById("directVideo");
+      vid.src = url;
+      vid.addEventListener("ended", advanceVideo, {once:true});
+      vid.addEventListener("error", advanceVideo, {once:true});
+      vid.play().catch(()=>{});
+    }
+  }
+
+  settingsDocRef.onSnapshot((snap)=>{
+    const data = snap.exists ? snap.data() : {};
+    const links = Array.isArray(data.videoLinks) ? data.videoLinks : [];
+    const key = JSON.stringify(links);
+    if(key !== lastVideoLinksKey){
+      lastVideoLinksKey = key;
+      videoLinks = links;
+      currentVideoIndex = 0;
+      playCurrentVideo();
+    }
+  }, (err)=>{
+    console.error("تعذر تحميل إعدادات الفيديو", err);
+  });
+
+  function renderVideoLinksRows(links){
+    const list = document.getElementById("videoLinksList");
+    list.innerHTML = "";
+    const items = links.length ? links.slice() : [""];
+    items.forEach((url, idx)=>{
+      addVideoLinkRow(url, idx+1);
+    });
+  }
+  function addVideoLinkRow(url, num){
+    const list = document.getElementById("videoLinksList");
+    const row = document.createElement("div");
+    row.className = "video-link-row";
+    row.innerHTML = `
+      <div class="row-num">${num || (list.children.length+1)}</div>
+      <input type="text" placeholder="https://www.youtube.com/watch?v=xxxxxxx" value="${(url||"").replace(/"/g,"&quot;")}">
+      <button type="button" class="row-remove">حذف</button>
+    `;
+    row.querySelector(".row-remove").addEventListener("click", ()=>{
+      row.remove();
+      renumberVideoRows();
+    });
+    list.appendChild(row);
+  }
+  function renumberVideoRows(){
+    const rows = document.querySelectorAll("#videoLinksList .video-link-row");
+    rows.forEach((row, i)=>{
+      row.querySelector(".row-num").textContent = i+1;
+    });
+  }
+  document.getElementById("addVideoLinkBtn").addEventListener("click", ()=>{
+    addVideoLinkRow("", document.querySelectorAll("#videoLinksList .video-link-row").length + 1);
+  });
+
+  document.getElementById("settingsToggle").addEventListener("click", ()=>{
+    const pass = prompt("أدخل كلمة مرور الإعدادات:");
+    if(pass === null) return;
+    if(pass !== SETTINGS_PASSWORD){
+      alert("كلمة المرور غير صحيحة");
+      return;
+    }
+    renderVideoLinksRows(videoLinks);
+    document.getElementById("settingsModal").classList.add("show");
+  });
+  document.getElementById("cancelVideoLinksBtn").addEventListener("click", ()=>{
+    document.getElementById("settingsModal").classList.remove("show");
+  });
+  document.getElementById("saveVideoLinksBtn").addEventListener("click", async ()=>{
+    const inputs = document.querySelectorAll("#videoLinksList .video-link-row input");
+    const links = Array.from(inputs).map(inp=>inp.value.trim()).filter(Boolean);
+    try{
+      await settingsDocRef.set({videoLinks: links}, {merge:true});
+      document.getElementById("settingsModal").classList.remove("show");
+    }catch(e){
+      console.error(e);
+      alert("تعذر حفظ الروابط، تحقق من الاتصال بالإنترنت");
+    }
+  });
 
   function render(departments, nowServing){
     const grid = document.getElementById("grid");
