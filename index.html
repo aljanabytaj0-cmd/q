@@ -133,6 +133,10 @@
   }
   .toast.show{opacity:1;bottom:30px;}
 
+  @media print{
+    #toast{display:none !important;}
+  }
+
   /* Printable ticket - hidden on screen except when printing */
   #ticketPrintArea{display:none;}
 
