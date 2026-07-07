@@ -124,6 +124,10 @@
   <div class="modal">
     <h3>إعدادات فيديوهات الشاشة</h3>
     <div class="hint">أضف رابط فيديو واحد بكل خانة (يدعم روابط يوتيوب أو روابط فيديو مباشرة mp4). تُعرض الفيديوهات بنفس الترتيب وتتكرر تلقائياً بدون توقف.</div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-bottom:12px;cursor:pointer;">
+      <input type="checkbox" id="lowBandwidthCheckbox" style="width:18px;height:18px;">
+      وضع توفير الإنترنت (إيقاف الفيديو مؤقتاً وعرض شبكة الأقسام بكامل الشاشة)
+    </label>
     <div id="videoLinksList"></div>
     <button class="btn-add-video" id="addVideoLinkBtn" type="button">+ إضافة فيديو جديد</button>
     <div class="modal-actions">
@@ -148,6 +152,9 @@
   };
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
+  try{
+    db.enablePersistence({synchronizeTabs:true}).catch(err=>console.warn("تعذر تفعيل التخزين المؤقت المحلي", err));
+  }catch(e){ console.warn(e); }
   const stateDocRef = db.collection("hospitalQueue").doc("state");
   const settingsDocRef = db.collection("hospitalQueue").doc("mainScreenSettings");
   const SETTINGS_PASSWORD = "HSO2000";
@@ -284,14 +291,25 @@
     if(isYouTubeUrl(url)){
       const videoId = extractYouTubeId(url);
       if(!videoId){ advanceVideo(); return; }
-      pane.innerHTML = '<div id="ytPlayerContainer" style="width:100%;height:100%;"></div>';
+      pane.innerHTML = '<div id="ytPlayerContainer" style="width:100%;height:100%;pointer-events:none;"></div>';
       loadYouTubeApiIfNeeded(()=>{
         if(ytPlayer){ try{ ytPlayer.destroy(); }catch(e){} ytPlayer = null; }
         ytPlayer = new YT.Player("ytPlayerContainer", {
           width: "100%", height: "100%", videoId: videoId,
-          playerVars:{ autoplay:1, mute:1, controls:0, rel:0, playsinline:1, modestbranding:1 },
+          playerVars:{
+            autoplay:1, mute:1, controls:0, rel:0, playsinline:1, modestbranding:1,
+            disablekb:1, fs:0, iv_load_policy:3, cc_load_policy:0
+          },
           events:{
-            onStateChange:(e)=>{ if(e.data === YT.PlayerState.ENDED) advanceVideo(); },
+            onReady:(e)=>{
+              try{ e.target.setPlaybackQuality("small"); }catch(err){}
+            },
+            onStateChange:(e)=>{
+              if(e.data === YT.PlayerState.ENDED) advanceVideo();
+              if(e.data === YT.PlayerState.PLAYING){
+                try{ e.target.setPlaybackQuality("small"); }catch(err){}
+              }
+            },
             onError:()=>{ advanceVideo(); }
           }
         });
@@ -306,15 +324,37 @@
     }
   }
 
+  let lowBandwidthMode = false;
+
+  function applyLowBandwidthLayout(){
+    const videoPane = document.getElementById("videoPane");
+    const queuePane = document.querySelector(".queue-pane");
+    if(lowBandwidthMode){
+      videoPane.style.display = "none";
+      queuePane.style.flex = "1 1 100%";
+      if(ytPlayer){ try{ ytPlayer.destroy(); }catch(e){} ytPlayer = null; }
+    }else{
+      videoPane.style.display = "flex";
+      queuePane.style.flex = "1 1 58%";
+      playCurrentVideo();
+    }
+  }
+
   settingsDocRef.onSnapshot((snap)=>{
     const data = snap.exists ? snap.data() : {};
     const links = Array.isArray(data.videoLinks) ? data.videoLinks : [];
     const key = JSON.stringify(links);
+    const newLowBandwidth = !!data.lowBandwidthMode;
+    const lowBandwidthChanged = newLowBandwidth !== lowBandwidthMode;
+    lowBandwidthMode = newLowBandwidth;
+    if(lowBandwidthChanged){
+      applyLowBandwidthLayout();
+    }
     if(key !== lastVideoLinksKey){
       lastVideoLinksKey = key;
       videoLinks = links;
       currentVideoIndex = 0;
-      playCurrentVideo();
+      if(!lowBandwidthMode) playCurrentVideo();
     }
   }, (err)=>{
     console.error("تعذر تحميل إعدادات الفيديو", err);
@@ -361,6 +401,7 @@
       return;
     }
     renderVideoLinksRows(videoLinks);
+    document.getElementById("lowBandwidthCheckbox").checked = lowBandwidthMode;
     document.getElementById("settingsModal").classList.add("show");
   });
   document.getElementById("cancelVideoLinksBtn").addEventListener("click", ()=>{
@@ -369,8 +410,9 @@
   document.getElementById("saveVideoLinksBtn").addEventListener("click", async ()=>{
     const inputs = document.querySelectorAll("#videoLinksList .video-link-row input");
     const links = Array.from(inputs).map(inp=>inp.value.trim()).filter(Boolean);
+    const lowBandwidth = document.getElementById("lowBandwidthCheckbox").checked;
     try{
-      await settingsDocRef.set({videoLinks: links}, {merge:true});
+      await settingsDocRef.set({videoLinks: links, lowBandwidthMode: lowBandwidth}, {merge:true});
       document.getElementById("settingsModal").classList.remove("show");
     }catch(e){
       console.error(e);
