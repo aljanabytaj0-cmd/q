@@ -91,7 +91,7 @@
   let departments = [];
   let nowServing = {};
   let lastShownNumber = null;
-  let selectedDeptId = localStorage.getItem(DEVICE_KEY) || null;
+  let selectedDeptId = sessionStorage.getItem(DEVICE_KEY) || null;
   let soundEnabled = false;
   let audioCtx = null;
   let firstRender = true;
@@ -170,9 +170,17 @@
   }
   document.getElementById("confirmDeptBtn").addEventListener("click", ()=>{
     selectedDeptId = document.getElementById("deptSelect").value;
-    localStorage.setItem(DEVICE_KEY, selectedDeptId);
+    sessionStorage.setItem(DEVICE_KEY, selectedDeptId);
     renderMain();
   });
+
+  function triggerPulseAndBeep(){
+    const numEl = document.getElementById("servingNumber");
+    numEl.classList.remove("pulse");
+    void numEl.offsetWidth;
+    numEl.classList.add("pulse");
+    if(soundEnabled) playAlertBeep();
+  }
 
   function renderMain(){
     const dept = departments.find(d=>d.id===selectedDeptId);
@@ -184,16 +192,15 @@
     const text = serving>0 ? (dept.prefix+"-"+String(serving).padStart(3,"0")) : "—";
     const numEl = document.getElementById("servingNumber");
     const changed = lastShownNumber !== null && serving !== lastShownNumber;
-    if(changed){
-      numEl.classList.remove("pulse");
-      void numEl.offsetWidth;
-      numEl.classList.add("pulse");
-      if(!firstRender && soundEnabled) playAlertBeep();
+    if(changed && !firstRender){
+      triggerPulseAndBeep();
     }
     numEl.textContent = text;
     lastShownNumber = serving;
     firstRender = false;
   }
+
+  let lastRecallTs = null;
 
   stateDocRef.onSnapshot((snap)=>{
     if(!snap.exists){ updateSyncStatus("⏳ في انتظار إنشاء قاعدة البيانات من جهاز الاستعلامات", false); return; }
@@ -205,6 +212,16 @@
       renderDeptPicker();
     }else{
       renderMain();
+    }
+
+    // Handle "recall same number" pings for this specific department
+    const recall = data.recallPing;
+    if(recall && recall.ts && recall.ts !== lastRecallTs){
+      const isFirstLoad = (lastRecallTs === null);
+      lastRecallTs = recall.ts;
+      if(!isFirstLoad && recall.deptId === selectedDeptId){
+        triggerPulseAndBeep();
+      }
     }
   }, (err)=>{
     console.error(err);
