@@ -29,7 +29,54 @@
   }
 
   .content-split{flex:1;display:flex;flex-direction:row;overflow:hidden;min-height:0;}
-  .queue-pane{flex:1 1 58%;overflow-y:auto;min-width:0;}
+  .queue-pane{flex:1 1 58%;overflow-y:auto;min-width:0;position:relative;}
+
+  .announce-overlay{
+    position:absolute;inset:0;z-index:60;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    background:radial-gradient(circle at 50% 40%, #274a9e 0%, #16224f 62%, #0d1733 100%);
+    color:#fff;opacity:0;pointer-events:none;text-align:center;padding:20px;
+    transform:scale(0.94);
+    transition:opacity .55s cubic-bezier(.22,1,.36,1), transform .55s cubic-bezier(.22,1,.36,1);
+  }
+  .announce-overlay.visible{ opacity:1; transform:scale(1); }
+
+  .announce-overlay .a-label,
+  .announce-overlay .a-dept,
+  .announce-overlay .a-number-wrap{
+    opacity:0; transform:translateY(16px);
+    transition:opacity .5s cubic-bezier(.22,1,.36,1), transform .5s cubic-bezier(.22,1,.36,1);
+  }
+  .announce-overlay.visible .a-label{ transition-delay:.05s; opacity:.9; transform:translateY(0); }
+  .announce-overlay.visible .a-dept{ transition-delay:.15s; opacity:1; transform:translateY(0); }
+  .announce-overlay.visible .a-number-wrap{ transition-delay:.28s; opacity:1; transform:translateY(0); }
+
+  .announce-overlay .a-label{font-size:clamp(14px,1.6vw,20px);font-weight:700;letter-spacing:2px;}
+  .announce-overlay .a-dept{font-size:clamp(24px,3.6vw,46px);font-weight:800;opacity:.92;}
+
+  .a-number-wrap{position:relative;display:flex;align-items:center;justify-content:center;font-size:clamp(56px,9vw,128px);}
+  .a-number-wrap .ring{
+    position:absolute;width:1em;height:1em;border-radius:50%;
+    border:3px solid var(--amber);opacity:0;
+  }
+  .a-number-wrap.beat .ring{ animation:ringPing 1.1s cubic-bezier(.22,1,.36,1); }
+  .announce-overlay .a-number{
+    position:relative;font-size:clamp(56px,9vw,128px);font-weight:900;letter-spacing:2px;color:#fff;
+    text-shadow:0 0 18px rgba(216,56,74,0.55);
+    transition:transform .5s cubic-bezier(.34,1.56,.64,1), text-shadow .5s ease;
+  }
+  .a-number-wrap.beat .a-number{ animation:numberBeat 1.1s cubic-bezier(.34,1.56,.64,1); }
+
+  @keyframes numberBeat{
+    0%{ transform:scale(1); text-shadow:0 0 18px rgba(216,56,74,0.55); }
+    35%{ transform:scale(1.12); text-shadow:0 0 42px rgba(216,56,74,0.95); }
+    65%{ transform:scale(0.99); text-shadow:0 0 18px rgba(216,56,74,0.55); }
+    100%{ transform:scale(1); text-shadow:0 0 18px rgba(216,56,74,0.55); }
+  }
+  @keyframes ringPing{
+    0%{ width:0.7em; height:0.7em; opacity:.75; }
+    100%{ width:1.9em; height:1.9em; opacity:0; }
+  }
   .video-pane{
     flex:1 1 42%;background:#000;position:relative;display:flex;align-items:center;justify-content:center;
     border-right:3px solid var(--teal-deep);min-width:0;
@@ -114,6 +161,14 @@
   <div class="queue-pane">
     <div class="grid" id="grid"></div>
     <div class="empty-note" id="emptyNote" style="display:none;">لا توجد أقسام مضافة بعد</div>
+    <div class="announce-overlay" id="announceOverlay">
+      <div class="a-label">📢 استدعاء</div>
+      <div class="a-dept" id="announceDept"></div>
+      <div class="a-number-wrap" id="announceNumberWrap">
+        <span class="ring"></span>
+        <span class="a-number" id="announceNumber"></span>
+      </div>
+    </div>
   </div>
   <div class="video-pane" id="videoPane">
     <div class="video-placeholder">⏳ جاري تحميل الفيديوهات...</div>
@@ -232,9 +287,40 @@
     }catch(e){ console.error(e); }
   }
 
+  function playAlertBeepAt(delaysMs){
+    delaysMs.forEach(delay=>{
+      setTimeout(()=>{ if(soundEnabled) playAlertBeep(); }, delay);
+    });
+  }
+
+  function showAnnounceOverlay(dept, number){
+    const overlay = document.getElementById("announceOverlay");
+    const numberWrap = document.getElementById("announceNumberWrap");
+    document.getElementById("announceDept").textContent = dept.name;
+    document.getElementById("announceNumber").textContent = dept.prefix+"-"+String(number).padStart(3,"0");
+
+    // Smooth single entrance (staggered fade/slide handled purely by CSS transitions)
+    overlay.classList.add("visible");
+
+    // Gentle glowing "beat" pulse on the number itself, 3 times, synced with the chime
+    [500, 1500, 2500].forEach(delay=>{
+      setTimeout(()=>{
+        numberWrap.classList.remove("beat");
+        void numberWrap.offsetWidth; // restart animation cleanly
+        numberWrap.classList.add("beat");
+      }, delay);
+    });
+
+    // Smooth single exit
+    setTimeout(()=>{
+      overlay.classList.remove("visible");
+      setTimeout(()=>numberWrap.classList.remove("beat"), 600);
+    }, 3800);
+  }
+
   function announce(dept, number){
-    if(!soundEnabled) return;
-    playAlertBeep();
+    showAnnounceOverlay(dept, number);
+    playAlertBeepAt([500, 1500, 2500]);
   }
 
   // ---------- Video playlist (queue-room screen) ----------
