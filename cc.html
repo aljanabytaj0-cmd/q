@@ -18,7 +18,32 @@
   header .sub{font-size:12.5px;opacity:.85;margin-top:4px;}
   #syncStatus{font-size:12px;margin-top:4px;}
 
-  .wrap{flex:1;width:100%;max-width:520px;padding:24px 18px;display:flex;flex-direction:column;align-items:center;gap:18px;}
+  .wrap{flex:1;width:100%;max-width:960px;padding:20px 18px;display:flex;flex-direction:column;align-items:center;gap:18px;}
+
+  .layout{width:100%;display:flex;flex-direction:row;gap:18px;align-items:flex-start;}
+  .control-col{flex:0 0 340px;max-width:340px;display:flex;flex-direction:column;gap:14px;}
+  .queue-col{flex:1;min-width:0;background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;}
+  .queue-col h3{margin:0 0 10px;font-size:15px;color:var(--teal-deep);}
+  .queue-list{max-height:70vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;}
+  .queue-item{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:12px 14px;border-radius:10px;border:1.5px solid var(--line);background:#fafbfe;
+    cursor:pointer;font-size:15px;font-weight:700;
+  }
+  .queue-item:hover{border-color:var(--teal-light);}
+  .queue-item .qi-num{font-weight:900;}
+  .queue-item .qi-status{font-size:11.5px;font-weight:600;color:var(--muted);}
+  .queue-item.served{opacity:.5;}
+  .queue-item.served .qi-status{color:#4a9d6b;}
+  .queue-item.current{border-color:var(--amber);background:#fff3f0;box-shadow:0 0 0 2px rgba(216,56,74,0.15);}
+  .queue-item.current .qi-status{color:var(--amber);}
+  .queue-item.waiting .qi-status{color:var(--teal);}
+  .queue-empty{color:var(--muted);font-size:13.5px;text-align:center;padding:20px 6px;}
+
+  @media (max-width:720px){
+    .layout{flex-direction:column;}
+    .control-col{flex:1 1 auto;max-width:100%;width:100%;}
+  }
 
   select, .btn{
     font-family:inherit;font-size:16px;border-radius:10px;padding:12px 16px;border:1px solid var(--line);
@@ -76,15 +101,24 @@
   <div id="mainView" style="width:100%;display:none;flex-direction:column;align-items:center;gap:18px;">
     <div class="dept-name" id="deptNameLabel"></div>
 
-    <div class="serving-box">
-      <div class="serving-label">الرقم الجاري خدمته الآن</div>
-      <div class="serving-number" id="servingNumber">—</div>
-      <div class="issued-label" id="issuedLabel"></div>
-    </div>
+    <div class="layout">
+      <div class="control-col">
+        <div class="serving-box">
+          <div class="serving-label">الرقم الجاري خدمته الآن</div>
+          <div class="serving-number" id="servingNumber">—</div>
+          <div class="issued-label" id="issuedLabel"></div>
+        </div>
 
-    <button class="call-btn" id="callNextBtn">📢 استدعاء التالي</button>
-    <button class="secondary-btn" id="recallBtn">🔁 إعادة استدعاء نفس الرقم</button>
-    <button class="change-dept" id="changeDeptBtn">تغيير القسم</button>
+        <button class="call-btn" id="callNextBtn">📢 استدعاء التالي</button>
+        <button class="secondary-btn" id="recallBtn">🔁 إعادة استدعاء نفس الرقم</button>
+        <button class="change-dept" id="changeDeptBtn">تغيير القسم</button>
+      </div>
+
+      <div class="queue-col">
+        <h3>قائمة أرقام السرة اليوم</h3>
+        <div class="queue-list" id="queueList"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -111,7 +145,7 @@
   let departments = [];
   let counts = {};
   let nowServing = {};
-  let selectedDeptId = localStorage.getItem(DEVICE_KEY) || null;
+  let selectedDeptId = sessionStorage.getItem(DEVICE_KEY) || null;
 
   function showToast(msg){
     const el = document.getElementById("toast");
@@ -145,7 +179,7 @@
   document.getElementById("confirmDeptBtn").addEventListener("click", ()=>{
     const sel = document.getElementById("deptSelect");
     selectedDeptId = sel.value;
-    localStorage.setItem(DEVICE_KEY, selectedDeptId);
+    sessionStorage.setItem(DEVICE_KEY, selectedDeptId);
     renderMain();
   });
   document.getElementById("changeDeptBtn").addEventListener("click", ()=>{
@@ -167,6 +201,53 @@
     callBtn.disabled = !canCallNext;
     callBtn.textContent = canCallNext ? "📢 استدعاء التالي" : "📢 لا يوجد مراجعين إضافيين بالانتظار";
     document.getElementById("recallBtn").style.display = serving>0 ? "block" : "none";
+    renderQueueList(dept, serving, issued);
+  }
+
+  function renderQueueList(dept, serving, issued){
+    const list = document.getElementById("queueList");
+    list.innerHTML = "";
+    if(issued === 0){
+      list.innerHTML = '<div class="queue-empty">لم يتم إصدار أي رقم لهذا القسم اليوم بعد</div>';
+      return;
+    }
+    // Show most recent numbers first so the doctor doesn't have to scroll far
+    for(let n = issued; n >= 1; n--){
+      const item = document.createElement("div");
+      let statusClass = "waiting", statusText = "بالانتظار";
+      if(n === serving){ statusClass = "current"; statusText = "الحالي الآن"; }
+      else if(n < serving){ statusClass = "served"; statusText = "تم استدعاؤه"; }
+      item.className = "queue-item " + statusClass;
+      item.innerHTML = `
+        <span class="qi-num">${dept.prefix}-${String(n).padStart(3,"0")}</span>
+        <span class="qi-status">${statusText}</span>
+      `;
+      item.addEventListener("click", ()=>callSpecificNumber(dept, n, serving));
+      list.appendChild(item);
+    }
+  }
+
+  async function callSpecificNumber(dept, number, currentServing){
+    if(number === currentServing){
+      // Same number already being served -> just re-ping the announcement
+      stateDocRef.set({ recallPing: { deptId: dept.id, ts: Date.now() } }, {merge:true})
+        .catch(err=>console.error(err));
+      showToast("تم إعادة إرسال إشعار الاستدعاء لنفس الرقم");
+      return;
+    }
+    try{
+      await db.runTransaction(async (tx)=>{
+        const snap = await tx.get(stateDocRef);
+        const data = snap.exists ? snap.data() : {};
+        const nowServing2 = data.nowServing || {};
+        nowServing2[dept.id] = number;
+        tx.set(stateDocRef, Object.assign({}, data, {nowServing: nowServing2}));
+      });
+      showToast("تم استدعاء الرقم " + dept.prefix + "-" + String(number).padStart(3,"0"));
+    }catch(e){
+      console.error(e);
+      showToast("تعذر الاتصال بقاعدة البيانات");
+    }
   }
 
   document.getElementById("callNextBtn").addEventListener("click", async ()=>{
