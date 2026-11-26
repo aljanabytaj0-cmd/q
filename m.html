@@ -108,6 +108,10 @@
   }
   .modal-bg.show{display:flex;}
   .modal{background:#fff;border-radius:16px;padding:22px;max-width:520px;width:100%;color:var(--ink);}
+  .modal{max-height:92vh;overflow-y:auto;}
+  #departmentChoices{max-height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;}
+  #departmentChoices label{display:flex;align-items:center;gap:8px;padding:6px;cursor:pointer;}
+  #departmentChoices input{width:18px;height:18px;flex-shrink:0;}
   .modal h3{margin:0 0 6px;color:var(--teal-deep);}
   .modal .hint{font-size:12.5px;color:var(--muted);margin-bottom:10px;}
   .modal textarea{
@@ -178,6 +182,11 @@
 
 <div class="modal-bg" id="settingsModal">
   <div class="modal">
+    <h3>الأقسام الظاهرة في هذه الشاشة</h3>
+    <div class="hint">اختر الأقسام المطلوب عرضها واستقبال ندائها على هذا الجهاز فقط.</div>
+    <div id="departmentChoices"></div>
+    <button class="btn-save" id="saveDepartmentsBtn" type="button">حفظ الأقسام الظاهرة</button>
+    <hr style="border:0;border-top:1px solid var(--line);margin:16px 0;">
     <h3>إعدادات فيديوهات الشاشة</h3>
     <div class="hint">أضف رابط فيديو واحد بكل خانة (يدعم روابط يوتيوب أو روابط فيديو مباشرة mp4). تُعرض الفيديوهات بنفس الترتيب وتتكرر تلقائياً بدون توقف.</div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;margin-bottom:12px;cursor:pointer;">
@@ -219,6 +228,49 @@
   let previousServing = {};
   let firstSnapshot = true;
   let audioCtx = null;
+  const visibilityKey = "hospitalQueue.mainScreen.visibleDepartments.v1";
+  let visibleIds = null;
+  let latestDepartments = [];
+  let latestServing = {};
+  let departmentsLoaded = false;
+  try {
+    const saved = JSON.parse(localStorage.getItem(visibilityKey));
+    if(Array.isArray(saved)) visibleIds = saved.map(String);
+  } catch(e) { console.warn(e); }
+  function isVisible(dept){
+    if(visibleIds !== null) return visibleIds.indexOf(String(dept.id)) !== -1;
+    const name = String(dept.name || "").replace(/[\u0640\u064B-\u065F]/g, "").trim();
+    return /سونار/.test(name);
+  }
+  function renderDepartmentChoices(){
+    const list = document.getElementById("departmentChoices");
+    list.innerHTML = "";
+    document.getElementById("saveDepartmentsBtn").disabled = !departmentsLoaded;
+    if(!latestDepartments.length){
+      list.textContent = departmentsLoaded ? "لا توجد أقسام مضافة" : "جاري تحميل الأقسام...";
+      return;
+    }
+    latestDepartments.forEach(dept=>{
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = String(dept.id);
+      input.checked = isVisible(dept);
+      label.appendChild(input);
+      label.appendChild(document.createTextNode(dept.name));
+      list.appendChild(label);
+    });
+  }
+  document.getElementById("saveDepartmentsBtn").addEventListener("click", ()=>{
+    if(!departmentsLoaded) return;
+    const selected = Array.from(document.querySelectorAll("#departmentChoices input:checked")).map(input=>input.value);
+    try { localStorage.setItem(visibilityKey, JSON.stringify(selected)); }
+    catch(e){ alert("تعذر حفظ اختيار الأقسام في هذا المتصفح"); return; }
+    visibleIds = selected;
+    document.getElementById("announceOverlay").classList.remove("visible");
+    render(latestDepartments, latestServing, false);
+    document.getElementById("settingsModal").classList.remove("show");
+  });
 
   function ensureAudioContext(){
     if(!audioCtx){
@@ -531,6 +583,7 @@
       alert("كلمة المرور غير صحيحة");
       return;
     }
+    renderDepartmentChoices();
     renderVideoLinksRows(videoLinks);
     document.getElementById("lowBandwidthCheckbox").checked = lowBandwidthMode;
     document.getElementById("settingsModal").classList.add("show");
@@ -551,8 +604,10 @@
     }
   });
 
-  function render(departments, nowServing){
+  function render(departments, nowServing, notify = true){
+    departments = departments.filter(isVisible);
     const grid = document.getElementById("grid");
+    document.getElementById("emptyNote").textContent = latestDepartments.length ? "لا توجد أقسام مختارة للعرض" : "لا توجد أقسام مضافة بعد";
     document.getElementById("emptyNote").style.display = departments.length ? "none" : "block";
     grid.innerHTML = "";
     departments.forEach(dept=>{
@@ -564,7 +619,7 @@
         <div class="dname">${escapeHtml(dept.name)}</div>
         <div class="num ${serving>0?"":"empty"}">${numText}</div>
       `;
-      if(!firstSnapshot && previousServing[dept.id] !== undefined && previousServing[dept.id] !== serving && serving>0){
+      if(notify && !firstSnapshot && previousServing[dept.id] !== undefined && previousServing[dept.id] !== serving && serving>0){
         cell.classList.add("flash");
         setTimeout(()=>cell.classList.remove("flash"), 2500);
         announce(dept, serving);
@@ -587,6 +642,11 @@
     const departments = data.departments || [];
     const nowServing = data.nowServing || {};
     updateSyncStatus("● متصل - يتزامن لحظياً", true);
+    const wasLoaded = departmentsLoaded;
+    latestDepartments = departments;
+    latestServing = nowServing;
+    departmentsLoaded = true;
+    if(!wasLoaded && document.getElementById("settingsModal").classList.contains("show")) renderDepartmentChoices();
     render(departments, nowServing);
     previousServing = Object.assign({}, nowServing);
     firstSnapshot = false;
@@ -599,7 +659,7 @@
       if(!isFirstLoad){
         const dept = departments.find(d=>d.id===recall.deptId);
         const servingNumber = nowServing[recall.deptId] || 0;
-        if(dept && servingNumber>0){
+        if(dept && isVisible(dept) && servingNumber>0){
           announce(dept, servingNumber);
         }
       }
