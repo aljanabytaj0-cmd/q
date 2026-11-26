@@ -71,6 +71,23 @@
   .announce-overlay .a-dept{font-size:8vh;}
   .announce-overlay .a-number{font-size:18vh;direction:ltr;white-space:nowrap;}
   .announce-overlay .a-number-wrap{min-width:0;width:90%;padding:12px 0;}
+  /* Lightweight call entrance: fixed text sizes retained for legacy TVs. */
+  .announce-overlay{background:#16224f;transition:opacity .25s ease;overflow:hidden;}
+  .announce-overlay::before{height:8px;background:#d8384a;}
+  .announce-overlay .a-label{background:#d8384a;color:#fff;padding:8px 24px;border-radius:6px;}
+  .announce-overlay .a-number-wrap{background:#263967;border:2px solid #526a9b;}
+  .announce-overlay.visible .a-number-wrap{
+    -webkit-animation:callEntrance .42s ease-out both;
+    animation:callEntrance .42s ease-out both;
+  }
+  @-webkit-keyframes callEntrance{
+    from{-webkit-transform:translateY(16px);opacity:.55;}
+    to{-webkit-transform:translateY(0);opacity:1;}
+  }
+  @keyframes callEntrance{
+    from{transform:translateY(16px);opacity:.55;}
+    to{transform:translateY(0);opacity:1;}
+  }
   .video-pane{
     flex:1 1 42%;background:#000;position:relative;display:flex;align-items:center;justify-content:center;
     border-left:3px solid var(--teal-deep);min-width:0;
@@ -380,7 +397,7 @@
     announceHideTimer = setTimeout(()=>{
       overlay.classList.remove("visible");
       announceHideTimer = null;
-    }, 2400);
+    }, 3500);
   }
 
   function announce(dept, number){
