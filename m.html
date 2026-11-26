@@ -66,6 +66,11 @@
     position:relative;font-size:clamp(56px,8.4vw,116px);font-weight:900;letter-spacing:2px;color:#fff;
     text-shadow:none;line-height:1;
   }
+  /* Explicit fallback sizes for legacy TV browsers without clamp(). */
+  .announce-overlay .a-label{font-size:3vh;}
+  .announce-overlay .a-dept{font-size:8vh;}
+  .announce-overlay .a-number{font-size:18vh;direction:ltr;white-space:nowrap;}
+  .announce-overlay .a-number-wrap{min-width:0;width:90%;padding:12px 0;}
   .video-pane{
     flex:1 1 42%;background:#000;position:relative;display:flex;align-items:center;justify-content:center;
     border-left:3px solid var(--teal-deep);min-width:0;
