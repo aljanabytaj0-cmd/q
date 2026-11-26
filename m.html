@@ -23,7 +23,7 @@
   #syncStatus{font-size:clamp(11px,1.1vw,14px);}
   #clock{font-size:clamp(16px,1.8vw,26px);font-weight:800;text-align:center;}
   #dateLine{font-size:clamp(11px,1.1vw,14px);text-align:center;opacity:.85;}
-  #soundToggle, #settingsToggle{
+  #soundToggle, #settingsToggle, #fullscreenToggle{
     background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;
     border-radius:10px;padding:10px 16px;font-size:14px;cursor:pointer;
   }
@@ -168,7 +168,7 @@
     <div id="dateLine">--/--/----</div>
   </div>
   <button id="soundToggle">🔇 تفعيل التنبيه الصوتي</button>
-  <button id="settingsToggle">⚙ الإعدادات</button>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><button id="settingsToggle">⚙ الإعدادات</button><button id="fullscreenToggle" type="button">⛶ ملء الشاشة</button></div>
 </header>
 
 <div class="content-split">
@@ -678,6 +678,25 @@
     console.error(err);
     updateSyncStatus("⚠ تعذر الاتصال بقاعدة البيانات", false);
   });
+})();
+</script>
+<script>
+(function(){
+  var button = document.getElementById('fullscreenToggle');
+  var root = document.documentElement;
+  function active(){ return document.fullscreenElement || document.webkitFullscreenElement || document.webkitCurrentFullScreenElement || document.webkitIsFullScreen || document.mozFullScreenElement || document.msFullscreenElement; }
+  function update(){ button.textContent = active() ? '⛶ إنهاء ملء الشاشة' : '⛶ ملء الشاشة'; }
+  function failed(){ alert('تعذر تفعيل ملء الشاشة. قد لا يدعم متصفح التلفاز هذه الخاصية.'); }
+  button.addEventListener('click', function(){
+    var exiting = active();
+    var target = exiting ? document : root;
+    var method = exiting ? (document.exitFullscreen || document.webkitExitFullscreen || document.webkitCancelFullScreen || document.mozCancelFullScreen || document.msExitFullscreen) : (root.requestFullscreen || root.webkitRequestFullscreen || root.webkitRequestFullScreen || root.mozRequestFullScreen || root.msRequestFullscreen);
+    if(!method){ failed(); return; }
+    try { var result = method.call(target); if(result && typeof result.catch === 'function') result.catch(failed); } catch(e){ failed(); }
+  });
+  var events = ['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange'];
+  for(var i=0;i<events.length;i++) document.addEventListener(events[i],update);
+  update();
 })();
 </script>
 </body>
