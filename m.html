@@ -28,7 +28,7 @@
     border-radius:10px;padding:10px 16px;font-size:14px;cursor:pointer;
   }
 
-  .content-split{flex:1;display:flex;flex-direction:row;overflow:hidden;min-height:0;}
+  .content-split{flex:1;display:flex;flex-direction:row-reverse;overflow:hidden;min-height:0;}
   .queue-pane{flex:1 1 58%;overflow-y:auto;min-width:0;position:relative;}
 
   .announce-overlay{
@@ -80,7 +80,7 @@
   }
   .video-pane{
     flex:1 1 42%;background:#000;position:relative;display:flex;align-items:center;justify-content:center;
-    border-right:3px solid var(--teal-deep);min-width:0;
+    border-left:3px solid var(--teal-deep);min-width:0;
   }
   .video-pane iframe, .video-pane video{width:100%;height:100%;border:0;display:block;}
   .video-placeholder{color:#aab3c5;text-align:center;font-size:clamp(14px,1.6vw,20px);padding:20px;line-height:1.8;}
@@ -99,6 +99,15 @@
   .cell .dname{font-size:clamp(16px,1.6vw,22px);font-weight:800;color:var(--teal-deep);margin-bottom:6px;}
   .cell .num{font-size:clamp(38px,5vw,66px);font-weight:900;color:var(--ink);line-height:1;}
   .cell .num.empty{color:var(--muted);font-size:clamp(24px,2.6vw,34px);}
+
+
+  /* Expand only the queue pane when exactly one department is visible. */
+  .grid.single-department{height:100%;min-height:0;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);}
+  .grid.single-department .cell{min-height:0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5vh;overflow:hidden;}
+  .grid.single-department .dname{font-size:6vw;font-size:clamp(26px,6vw,11vh);margin:0;line-height:1.2;}
+  .grid.single-department .num{font-size:11vw;font-size:clamp(40px,11vw,24vh);direction:ltr;white-space:nowrap;max-width:100%;}
+  .grid.single-department .num.empty{font-size:11vw;font-size:clamp(40px,11vw,24vh);}
+  .grid.single-department .cell.flash{transform:none;}
 
   .empty-note{padding:60px;text-align:center;color:var(--muted);font-size:16px;}
 
@@ -607,6 +616,7 @@
   function render(departments, nowServing, notify = true){
     departments = departments.filter(isVisible);
     const grid = document.getElementById("grid");
+    grid.classList.toggle("single-department", departments.length === 1);
     document.getElementById("emptyNote").textContent = latestDepartments.length ? "لا توجد أقسام مختارة للعرض" : "لا توجد أقسام مضافة بعد";
     document.getElementById("emptyNote").style.display = departments.length ? "none" : "block";
     grid.innerHTML = "";
