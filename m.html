@@ -343,7 +343,15 @@
   }
 
   // ---------- Video playlist (queue-room screen) ----------
-  let videoLinks = [];
+  const bundledVideoLinks = [
+    "videos/video-01.mp4",
+    "videos/video-02.mp4",
+    "videos/video-03.mp4",
+    "videos/video-04.mp4",
+    "videos/video-05.mp4"
+  ];
+  let videoLinks = bundledVideoLinks.slice();
+  let videoRetryTimer = null;
   let currentVideoIndex = 0;
   let ytPlayer = null;
   let youtubeApiReady = false;
@@ -379,13 +387,20 @@
     tag.src = "https://www.youtube.com/iframe_api";
     document.head.appendChild(tag);
   }
+  function stopDirectVideo(){
+    clearTimeout(videoRetryTimer);
+    const old = document.getElementById("directVideo");
+    if(old){ old.onended = null; old.onerror = null; old.pause(); old.removeAttribute("src"); old.load(); old.remove(); }
+  }
   function advanceVideo(){
-    if(!videoLinks.length) return;
+    if(lowBandwidthMode || !videoLinks.length) return;
     currentVideoIndex = (currentVideoIndex + 1) % videoLinks.length;
     playCurrentVideo();
   }
   function playCurrentVideo(){
     const pane = document.getElementById("videoPane");
+    stopDirectVideo();
+    if(lowBandwidthMode) return;
     if(!videoLinks.length){
       pane.innerHTML = '<div class="video-placeholder">لا توجد فيديوهات مضافة بعد<br>أضفها من زر ⚙ الإعدادات</div>';
       return;
@@ -420,12 +435,19 @@
         });
       });
     }else{
-      pane.innerHTML = '<video id="directVideo" autoplay muted playsinline></video>';
+      if(ytPlayer){ try{ ytPlayer.destroy(); }catch(e){} ytPlayer = null; }
+      pane.innerHTML = '<video id="directVideo" autoplay muted playsinline preload="auto" style="object-fit:contain;"></video>';
       const vid = document.getElementById("directVideo");
+      vid.muted = true;
+      function retry(){
+        if(document.getElementById("directVideo") !== vid || lowBandwidthMode) return;
+        clearTimeout(videoRetryTimer);
+        videoRetryTimer = setTimeout(advanceVideo, 2000);
+      }
+      vid.onended = advanceVideo;
+      vid.onerror = retry;
       vid.src = url;
-      vid.addEventListener("ended", advanceVideo, {once:true});
-      vid.addEventListener("error", advanceVideo, {once:true});
-      vid.play().catch(()=>{});
+      try{ const result = vid.play(); if(result && result.catch) result.catch(retry); }catch(e){ retry(); }
     }
   }
 
@@ -435,6 +457,7 @@
     const videoPane = document.getElementById("videoPane");
     const queuePane = document.querySelector(".queue-pane");
     if(lowBandwidthMode){
+      stopDirectVideo();
       videoPane.style.display = "none";
       queuePane.style.flex = "1 1 100%";
       if(ytPlayer){ try{ ytPlayer.destroy(); }catch(e){} ytPlayer = null; }
@@ -445,9 +468,12 @@
     }
   }
 
+  // Start bundled videos without waiting for the network settings snapshot.
+  playCurrentVideo();
+  lastVideoLinksKey = JSON.stringify(videoLinks);
   settingsDocRef.onSnapshot((snap)=>{
     const data = snap.exists ? snap.data() : {};
-    const links = Array.isArray(data.videoLinks) ? data.videoLinks : [];
+    const links = Array.isArray(data.bundledScreenVideoLinks) ? data.bundledScreenVideoLinks : bundledVideoLinks.slice();
     const key = JSON.stringify(links);
     const newLowBandwidth = !!data.lowBandwidthMode;
     const lowBandwidthChanged = newLowBandwidth !== lowBandwidthMode;
@@ -517,7 +543,7 @@
     const links = Array.from(inputs).map(inp=>inp.value.trim()).filter(Boolean);
     const lowBandwidth = document.getElementById("lowBandwidthCheckbox").checked;
     try{
-      await settingsDocRef.set({videoLinks: links, lowBandwidthMode: lowBandwidth}, {merge:true});
+      await settingsDocRef.set({bundledScreenVideoLinks: links, lowBandwidthMode: lowBandwidth}, {merge:true});
       document.getElementById("settingsModal").classList.remove("show");
     }catch(e){
       console.error(e);
